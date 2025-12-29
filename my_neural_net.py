@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+from sklearn.metrics import roc_auc_score
 
 
 def sigmoid(x):
@@ -190,3 +191,22 @@ class MyNeuralNet:
         X_array = X
         y_pred, _, _ = self.forward(X_array)
         return y_pred
+
+    def score(self, X: pd.DataFrame, y: pd.Series) -> float:
+        # convert pandas dataframe to ndarrays
+        y_array = (
+            y.values.reshape(-1, 1) if isinstance(y, pd.Series) else y.reshape(-1, 1)
+        )
+        y_pred = self.predict(X)
+        # convert probabilities to classes
+        y_pred_labels = (y_pred >= 0.5).astype(int)
+        # compute accuracy
+        accuracy = np.mean(y_pred_labels == y_array)
+        return accuracy
+
+    def auc_score(self, X: pd.DataFrame, y: pd.Series) -> float:
+        y_array = (
+            y.values.reshape(-1, 1) if isinstance(y, pd.Series) else y.reshape(-1, 1)
+        )
+        y_pred = self.predict(X)
+        return roc_auc_score(y_array, y_pred)
