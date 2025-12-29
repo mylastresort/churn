@@ -31,3 +31,13 @@ def get_train_test_data(path: str):
     x_test = pd.DataFrame(scaler.transform(x_test), columns=x_test.columns)
 
     return x_train, x_test, y_train, y_test
+
+
+def get_test_data(path: str, features: list):
+    test_df = pd.read_csv(path)
+    df = test_df.drop(columns=["ID"])
+    df = df[features]
+    scaler = StandardScaler()
+    df = pd.DataFrame(scaler.fit_transform(df), columns=df.columns)
+    df["ID"] = test_df["ID"]
+    return df
