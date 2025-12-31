@@ -107,9 +107,22 @@ class MyNeuralNet:
         dA = binary_cross_entropy_derivative(y, activated_layers[-1])
         dZ = dA * sigmoid_derivative(weighted_layers[-1])
 
-        # compute gradients
+        # compute gradients - we transpoose for valid matrix multiplication
+        # (batch_size, n_weights).T @ (batch_size, n_output_weights=1) -> (n_weights, n_output_weights=1)
+        # we divide by m to get average gradient over all samples
+        # we apply this chain rule for all layers to update weights
         dw = activated_layers[-2].T @ dZ / m
-        db = np.sum(dZ) / m
+        # dZ is (batch_size, n_output_weights=64) we sum over y axis to get (n_output_weights=64,) - axis=0 means sum columns
+        db = np.sum(dZ, axis=0) / m
+
+        # print(
+        #     dZ.shape,
+        #     activated_layers[-2].T.shape,
+        #     dw.shape,
+        #     db.shape,
+        #     flush=True,
+        # )
+        # (1024, 1) (64, 1024) (64, 1) (1,)
 
         grads_w = [dw]
         grads_b = [db]
@@ -122,7 +135,17 @@ class MyNeuralNet:
 
             # compute gradients
             dw = activated_layers[i - 1].T @ dZ / m
-            db = np.sum(dZ) / m
+            db = np.sum(dZ, axis=0) / m
+
+            # print(
+            #     dZ.shape,
+            #     activated_layers[i - 1].T.shape,
+            #     dw.shape,
+            #     db.shape,
+            #     flush=True,
+            # )
+            # (1024, 64) (64, 1024) (64, 64) (64,)
+            # (1024, 64) (32, 1024) (32, 64) (64,)
 
             # append gradients
             grads_w.append(dw)
@@ -181,7 +204,6 @@ class MyNeuralNet:
                 # gives same result as Adam optimizer
                 for i in range(len(self.weights)):
                     self.weights[i] -= self.learning_rate * grads_weights[i]
-                for i in range(len(self.biases)):
                     self.biases[i] -= self.learning_rate * grads_biases[i]
 
             avg_epoch_loss = epoch_loss / n_batches
