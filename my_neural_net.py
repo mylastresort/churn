@@ -129,8 +129,9 @@ class MyNeuralNet:
 
         # iterate backwards through hidden layers
         for i in range(len(self.weights) - 1, 0, -1):
-            # apply chain rule
+            # we compute activation derivative of current layer backwards
             dA = dZ @ self.weights[i].T
+            # we apply chain rule and multiply activation derivative with derivative of current layer
             dZ = dA * relu_derivative(weighted_layers[i - 1])
 
             # compute gradients
@@ -212,6 +213,7 @@ class MyNeuralNet:
     def predict(self, X: pd.DataFrame) -> np.ndarray:
         X_array = X
         y_pred, _, _ = self.forward(X_array)
+        y_pred = (y_pred >= 0.5).astype(int)
         return y_pred
 
     def score(self, X: pd.DataFrame, y: pd.Series) -> float:
@@ -220,10 +222,8 @@ class MyNeuralNet:
             y.values.reshape(-1, 1) if isinstance(y, pd.Series) else y.reshape(-1, 1)
         )
         y_pred = self.predict(X)
-        # convert probabilities to classes
-        y_pred_labels = (y_pred >= 0.5).astype(int)
         # compute accuracy
-        accuracy = np.mean(y_pred_labels == y_array)
+        accuracy = np.mean(y_pred == y_array)
         return accuracy
 
     def auc_score(self, X: pd.DataFrame, y: pd.Series) -> float:
