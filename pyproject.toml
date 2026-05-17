@@ -12,11 +12,12 @@ dependencies = [
     "seaborn>=0.13.2",
     "tensorboard>=2.20.0",
     "tensorflow[and-cuda]>=2.21.0; sys_platform == 'linux'",
-    "tensorflow>=2.21.0; sys_platform == 'darwin' and platform_machine == 'arm64'",
+    "tensorflow>=2.21.0; sys_platform == 'darwin' and platform_machine == 'x86_64'",
+    "pip>=26.1.1",
 ]
 
 [tool.uv]
 required-environments = [
     "sys_platform == 'linux'",
-    "sys_platform == 'darwin' and platform_machine == 'arm64'",
+    "sys_platform == 'darwin' and platform_machine == 'x86_64'",
 ]
