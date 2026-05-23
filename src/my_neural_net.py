@@ -20,11 +20,17 @@ def relu_derivative(x):
     return (x > 0).astype(float)
 
 
-def binary_cross_entropy(y_true: np.ndarray, y_pred: np.ndarray):
+def binary_cross_entropy(
+    y_true: np.ndarray,
+    y_pred: np.ndarray,
+    sample_weights: np.ndarray = None,
+):
     epsilon = 1e-15
     y_pred = np.clip(y_pred, epsilon, 1 - epsilon)
-    loss = -np.mean(y_true * np.log(y_pred) + (1 - y_true) * np.log(1 - y_pred))
-    return loss
+    per_sample = -(y_true * np.log(y_pred) + (1 - y_true) * np.log(1 - y_pred))
+    if sample_weights is not None:
+        return np.average(per_sample, weights=sample_weights)
+    return np.mean(per_sample)
 
 
 def binary_cross_entropy_derivative(
@@ -98,6 +104,7 @@ class MyNeuralNet:
         y: np.ndarray,
         activated_layers: list[np.ndarray],
         weighted_layers: list[np.ndarray],
+        sample_weights: np.ndarray = None,
     ) -> tuple[list[np.ndarray], list[np.ndarray]]:
         # size of samples
         m = y.shape[0]
@@ -105,6 +112,9 @@ class MyNeuralNet:
         # apply chain rule for output layer
         # using binary cross-entropy loss for NN binary classification
         dA = binary_cross_entropy_derivative(y, activated_layers[-1])
+        # scale each sample's gradient by its class weight before propagating
+        if sample_weights is not None:
+            dA = dA * sample_weights
         dZ = dA * sigmoid_derivative(weighted_layers[-1])
 
         # compute gradients - we transpoose for valid matrix multiplication
@@ -156,13 +166,27 @@ class MyNeuralNet:
         grads_b.reverse()
         return grads_w, grads_b
 
-    def fit(self, X: pd.DataFrame, y: pd.Series) -> None:
+    def fit(
+        self,
+        X: pd.DataFrame,
+        y: pd.Series,
+        class_weight: dict = None,
+        validation_data: tuple[pd.DataFrame, pd.Series] = None,
+    ) -> None:
         # convert pandas dataframe to ndarrays
         X_array = X.values if isinstance(X, pd.DataFrame) else X
         # reshape to column vector to compare with output layer
         y_array = (
             y.values.reshape(-1, 1) if isinstance(y, pd.Series) else y.reshape(-1, 1)
         )
+
+        # build per-sample weight array from class_weight dict (fit on train only)
+        if class_weight is not None:
+            sw_array = np.array(
+                [class_weight[int(yi)] for yi in y_array.flatten()]
+            ).reshape(-1, 1)
+        else:
+            sw_array = None
 
         # initialize weights using layer sizes
         self.initialize_weights(n_features=X_array.shape[1])
@@ -174,6 +198,7 @@ class MyNeuralNet:
             # save shuffled data views for training
             X_shuffled = X_array[indices]
             y_shuffled = y_array[indices]
+            sw_shuffled = sw_array[indices] if sw_array is not None else None
 
             epoch_loss = 0  # to average loss after each batch training
             n_batches = 0
@@ -186,19 +211,22 @@ class MyNeuralNet:
                 # get the batch data views
                 X_batch = X_shuffled[start_idx:end_idx]
                 y_batch = y_shuffled[start_idx:end_idx]
+                sw_batch = (
+                    sw_shuffled[start_idx:end_idx] if sw_shuffled is not None else None
+                )
 
                 # forward propagation
                 y_pred, activated_layers, weighted_layers = self.forward(X_batch)
 
                 # get the loss
-                batch_loss = binary_cross_entropy(y_batch, y_pred)
+                batch_loss = binary_cross_entropy(y_batch, y_pred, sw_batch)
                 epoch_loss += batch_loss
 
                 n_batches += 1
 
                 # backward propagation to get gradients
                 grads_weights, grads_biases = self.backward(
-                    y_batch, activated_layers, weighted_layers
+                    y_batch, activated_layers, weighted_layers, sw_batch
                 )
 
                 # update weights using gradient descent
@@ -208,13 +236,21 @@ class MyNeuralNet:
                     self.biases[i] -= self.learning_rate * grads_biases[i]
 
             avg_epoch_loss = epoch_loss / n_batches
-            print(f"Epoch {epoch + 1}/{self.max_iter}, Loss: {avg_epoch_loss:.4f}")
+            acc = self.score(X, y)
+            auc = self.auc_score(X, y)
+            val_acc = self.score(*validation_data) if validation_data else 0
+            val_auc = self.auc_score(*validation_data) if validation_data else 0
+            print(
+                f"Epoch {epoch + 1}/{self.max_iter}, Loss: {avg_epoch_loss:.4f} - Acc: {acc:.4f} - AUC: {auc:.4f} - Val Acc: {val_acc:.4f} - Val AUC: {val_auc:.4f}",
+            )
+
+    def predict_proba(self, X: pd.DataFrame) -> np.ndarray:
+        X_array = X.values if isinstance(X, pd.DataFrame) else X
+        y_proba, _, _ = self.forward(X_array)
+        return y_proba
 
     def predict(self, X: pd.DataFrame) -> np.ndarray:
-        X_array = X
-        y_pred, _, _ = self.forward(X_array)
-        y_pred = (y_pred >= 0.5).astype(int)
-        return y_pred
+        return (self.predict_proba(X) >= 0.5).astype(int)
 
     def score(self, X: pd.DataFrame, y: pd.Series) -> float:
         # convert pandas dataframe to ndarrays
@@ -230,5 +266,4 @@ class MyNeuralNet:
         y_array = (
             y.values.reshape(-1, 1) if isinstance(y, pd.Series) else y.reshape(-1, 1)
         )
-        y_pred = self.predict(X)
-        return roc_auc_score(y_array, y_pred)
+        return roc_auc_score(y_array, self.predict_proba(X))

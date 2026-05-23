@@ -215,3 +215,7 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 data/p01_bank_data
+data/bank_data_train.csv
+data/bank_data_test.csv
+scoreboard.txt
+models
